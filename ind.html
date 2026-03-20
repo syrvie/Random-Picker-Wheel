@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smooth Premium Wheel</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 100%); color: #333; text-align: center; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        #status { font-size: 24px; font-weight: bold; color: #1a73e8; margin: 15px 0; padding: 10px 25px; background: white; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); min-width: 220px; }
+        .wheel-area { position: relative; display: inline-block; margin: 15px 0; }
+        #canvas { border: 12px solid #ffffff; border-radius: 50%; background: #ffffff; box-shadow: 0 15px 40px rgba(0,0,0,0.12); max-width: 90vw; max-height: 90vw; }
+        .pointer { position: absolute; right: -12px; top: 50%; transform: translateY(-50%); width: 0; height: 0; border-top: 18px solid transparent; border-bottom: 18px solid transparent; border-right: 40px solid #d93025; z-index: 10; filter: drop-shadow(3px 3px 3px rgba(0,0,0,0.2)); }
+        .controls { background: #ffffff; padding: 25px; border-radius: 16px; width: 95%; max-width: 480px; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.08); margin-top: 10px; }
+        textarea { width: 100%; background: #f8f9fa; color: #333; border: 2px solid #eee; border-radius: 10px; padding: 15px; min-height: 130px; font-size: 16px; outline: none; box-sizing: border-box; transition: 0.3s; }
+        textarea:focus { border-color: #1a73e8; background: #fff; }
+        .btn-group { display: flex; gap: 12px; margin-top: 20px; }
+        button { flex: 1; padding: 15px; font-size: 18px; cursor: pointer; border: none; border-radius: 8px; font-weight: bold; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        #spinBtn { background: #1a73e8; color: white; box-shadow: 0 4px 10px rgba(26, 115, 232, 0.3); }
+        #spinBtn:hover { background: #1557b0; transform: scale(1.02); }
+        #spinBtn:active { transform: scale(0.98); }
+        #removeBtn { background: #d93025; color: white; display: none; }
+        .secondary-btn { background: none; color: #70757a; margin-top: 20px; font-size: 14px; text-decoration: underline; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="status">✨ Ready to Spin!</div>
+
+    <div class="wheel-area">
+        <div class="pointer"></div>
+        <canvas id="canvas" width="500" height="500"></canvas>
+    </div>
+
+    <div class="controls">
+        <textarea id="nameInput" placeholder="Type names here..."></textarea>
+        <div class="btn-group">
+            <button id="spinBtn" onclick="handleSpin()">SPIN NOW</button>
+            <button id="removeBtn" onclick="removeWinner()">REMOVE WINNER</button>
+        </div>
+        <button class="secondary-btn" onclick="resetEverything()">Reset App Data</button>
+    </div>
+
+    <script>
+        const colors = ["#ea4335", "#4285f4", "#fbbc05", "#34a853", "#ff6d01", "#46bdc6", "#7b1fa2", "#fb4c8a"];
+        
+        // သင်နောက်ဆုံးပေးထားသော အစီအစဉ်အတိုင်း (Fixed Order)
+        const defaultSequence = [
+            "Ko Thet Naung", "Shein Thu", "Thar Chit", "Nga Pyu", "Sai Chit", 
+            "Ant Htoo", "Ko Pai", "Ko Kway", "Ko Ye Min Khaing", "Ko Wai Yan", 
+            "Fatty", "Ko Kyaw"
+        ];
+
+        let namesOnWheel = [];
+        let masterSequence = [];
+        let currentRotation = 0;
+        let lastWinner = null;
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('status');
+        const spinBtn = document.getElementById('spinBtn');
+        const removeBtn = document.getElementById('removeBtn');
+        const nameInput = document.getElementById('nameInput');
+
+        function init() {
+            const savedNames = localStorage.getItem('pro_smooth_names');
+            const savedSequence = localStorage.getItem('pro_smooth_seq');
+            
+            if (savedNames) {
+                nameInput.value = savedNames;
+                namesOnWheel = nameInput.value.split('\n').map(n => n.trim()).filter(n => n !== "");
+            } else {
+                // အစပိုင်းတွင် နာမည်များကို shuffle လုပ်ထားမည် (မရိပ်မိစေရန်)
+                namesOnWheel = [...defaultSequence].sort(() => Math.random() - 0.5);
+                nameInput.value = namesOnWheel.join('\n');
+            }
+
+            if (savedSequence) {
+                masterSequence = JSON.parse(savedSequence);
+            } else {
+                masterSequence = [...defaultSequence];
+            }
+            updateWheel();
+        }
+
+        function saveData() {
+            localStorage.setItem('pro_smooth_names', nameInput.value);
+            localStorage.setItem('pro_smooth_seq', JSON.stringify(masterSequence));
+        }
+
+        function updateWheel() {
+            namesOnWheel = nameInput.value.split('\n').map(n => n.trim()).filter(n => n !== "");
+            draw(currentRotation * Math.PI / 180);
+            saveData();
+        }
+
+        nameInput.addEventListener('input', updateWheel);
+
+        function draw(offsetAngle = 0) {
+            const size = namesOnWheel.length;
+            if (size === 0) { ctx.clearRect(0,0,500,500); return; }
+            const arc = (2 * Math.PI) / size;
+            ctx.clearRect(0, 0, 500, 500);
+            
+            namesOnWheel.forEach((name, i) => {
+                const angle = offsetAngle + (i * arc);
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.beginPath(); ctx.moveTo(250, 250);
+                ctx.arc(250, 250, 240, angle, angle + arc);
+                ctx.fill(); 
+                ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5; ctx.stroke();
+                
+                ctx.save();
+                ctx.translate(250, 250); ctx.rotate(angle + arc / 2);
+                ctx.textAlign = "right"; ctx.fillStyle = "#fff";
+                ctx.font = "bold 16px Segoe UI"; 
+                ctx.fillText(name, 230, 6);
+                ctx.restore();
+            });
+
+            ctx.beginPath(); ctx.arc(250, 250, 40, 0, 2 * Math.PI);
+            ctx.fillStyle = "white"; ctx.fill();
+        }
+
+        function handleSpin() {
+            if (namesOnWheel.length === 0) return;
+            
+            // Master Sequence ထဲမှ ပထမဆုံးလူကို ရွေးသည်
+            let targetName = masterSequence.length > 0 ? masterSequence[0] : namesOnWheel[0];
+            let winnerIdx = namesOnWheel.indexOf(targetName);
+            
+            if (winnerIdx === -1) {
+                winnerIdx = Math.floor(Math.random() * namesOnWheel.length);
+                targetName = namesOnWheel[winnerIdx];
+            }
+
+            lastWinner = targetName;
+            spinBtn.disabled = true;
+            statusText.innerText = "🎡 Spinning...";
+            removeBtn.style.display = "none";
+
+            const arcDeg = 360 / namesOnWheel.length;
+            const targetPosDeg = 360 - (winnerIdx * arcDeg) - (arcDeg / 2);
+            const totalTargetRotation = currentRotation + 2880 + (targetPosDeg - (currentRotation % 360));
+
+            animateSpin(totalTargetRotation);
+        }
+
+        function animateSpin(targetDeg) {
+            let startTime = null;
+            const duration = 5500;
+            const initialRotation = currentRotation;
+
+            function step(timestamp) {
+                if (!startTime) startTime = timestamp;
+                let elapsed = timestamp - startTime;
+                let t = Math.min(elapsed / duration, 1);
+                let easeOut = 1 - Math.pow(1 - t, 4); 
+                
+                currentRotation = initialRotation + (targetDeg - initialRotation) * easeOut;
+                draw(currentRotation * Math.PI / 180);
+
+                if (t < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    statusText.innerText = "🎉 Result: " + lastWinner;
+                    removeBtn.style.display = "inline-block";
+                    saveData();
+                }
+            }
+            requestAnimationFrame(step);
+        }
+
+        function removeWinner() {
+            if (masterSequence.length > 0 && masterSequence[0] === lastWinner) masterSequence.shift();
+            namesOnWheel = namesOnWheel.filter(n => n !== lastWinner);
+            nameInput.value = namesOnWheel.join('\n');
+            statusText.innerText = "✨ Ready!";
+            removeBtn.style.display = "none";
+            spinBtn.disabled = false;
+            saveData();
+            updateWheel();
+        }
+
+        function resetEverything() {
+            if (confirm("Reset data to default?")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
